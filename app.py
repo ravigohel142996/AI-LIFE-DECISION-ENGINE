@@ -16,6 +16,51 @@ from engine import (
 )
 
 
+def build_profile(
+    age: int,
+    education: str,
+    skills: str,
+    income: int,
+    savings: int,
+    city: str,
+    stress_level: int,
+    career_goals: str,
+    family_support: int,
+) -> dict:
+    return {
+        "age": age,
+        "education": education,
+        "skills": skills,
+        "income": income,
+        "savings": savings,
+        "city": city,
+        "stress_level": stress_level,
+        "career_goals": career_goals,
+        "family_support": family_support,
+    }
+
+
+def build_risk_map(savings: float, income: float, stress_level: int, decisions: dict[str, str]) -> pd.DataFrame:
+    scores = {
+        "Financial": 100 - min(100, (savings / max(income, 1)) * 30 + 20),
+        "Career": 55 + (15 if decisions["career_path"] == "Startup" else -8),
+        "Emotional": stress_level * 9,
+        "Execution": 45 + (20 if decisions["location"] == "Abroad" else 5),
+    }
+    clipped = {k: float(np.clip(v, 0, 100)) for k, v in scores.items()}
+    return pd.DataFrame({"Risk": list(clipped.keys()), "Score": list(clipped.values())})
+
+
+def build_decision_alignment(decisions: dict[str, str]) -> float:
+    risk_flags = [
+        decisions["career_path"] == "Startup",
+        decisions["location"] == "Abroad",
+        decisions["study_work"] == "Higher Study",
+        decisions["invest_save"] == "Invest",
+    ]
+    return float(np.clip((4 - sum(risk_flags)) / 4, 0, 1))
+
+
 st.set_page_config(page_title="AI Life Decision Engine", page_icon="🚀", layout="wide")
 
 st.markdown(
@@ -92,7 +137,7 @@ with left:
     family_support = st.slider("Family support", 1, 10, 7)
 
     st.markdown('<p class="section-title">Strategic Scenario Simulator</p>', unsafe_allow_html=True)
-    decisions = {}
+    decisions: dict[str, str] = {}
     for scenario in simulator.scenarios:
         decisions[scenario.key] = st.radio(scenario.label, scenario.options, horizontal=True)
 
@@ -101,17 +146,17 @@ with left:
 
 with right:
     if run:
-        profile = {
-            "age": age,
-            "education": education,
-            "skills": skills,
-            "income": income,
-            "savings": savings,
-            "city": city,
-            "stress_level": stress_level,
-            "career_goals": career_goals,
-            "family_support": family_support,
-        }
+        profile = build_profile(
+            age,
+            education,
+            skills,
+            income,
+            savings,
+            city,
+            stress_level,
+            career_goals,
+            family_support,
+        )
         state = simulator.encode_profile(profile, decisions)
 
         rl_success, happiness = rl_agent.train(state)
@@ -120,21 +165,10 @@ with right:
 
         wealth_df = forecast_model.project_wealth(income, savings, decisions["invest_save"], years=12)
         wealth_quality = forecast_model.forecast_quality(wealth_df)
-
-        risk_map = pd.DataFrame(
-            {
-                "Risk": ["Financial", "Career", "Emotional", "Execution"],
-                "Score": [
-                    100 - min(100, (savings / max(income, 1)) * 30 + 20),
-                    55 + (15 if decisions["career_path"] == "Startup" else -8),
-                    stress_level * 9,
-                    45 + (20 if decisions["location"] == "Abroad" else 5),
-                ],
-            }
-        )
+        risk_map = build_risk_map(savings, income, stress_level, decisions)
         advice = advisor.suggest(profile, decisions)
 
-        decision_alignment = float(np.clip((4 - sum([decisions["career_path"] == "Startup", decisions["location"] == "Abroad", decisions["study_work"] == "Higher Study", decisions["invest_save"] == "Invest"])) / 4, 0, 1))
+        decision_alignment = build_decision_alignment(decisions)
         m1, m2, m3 = st.columns(3)
         m1.markdown(f'<div class="metric-card"><h3>Success Probability</h3><h2>{success_probability*100:.1f}%</h2></div>', unsafe_allow_html=True)
         m2.markdown(f'<div class="metric-card"><h3>Happiness Score</h3><h2>{happiness:.1f}/100</h2></div>', unsafe_allow_html=True)
@@ -178,7 +212,15 @@ with right:
         with c2:
             treemap_df = pd.DataFrame(
                 {
-                    "Node": ["Life Path", "Career", "Location", "Finance", decisions["career_path"], decisions["location"], decisions["invest_save"]],
+                    "Node": [
+                        "Life Path",
+                        "Career",
+                        "Location",
+                        "Finance",
+                        decisions["career_path"],
+                        decisions["location"],
+                        decisions["invest_save"],
+                    ],
                     "Parent": ["", "Life Path", "Life Path", "Life Path", "Career", "Location", "Finance"],
                     "Value": [100, 33, 33, 34, 20, 18, 22],
                 }
@@ -189,7 +231,7 @@ with right:
                 parents="Parent",
                 values="Value",
                 color="Value",
-                color_continuous_scale="Bluered",
+                color_continuous_scale="Tealgrn",
                 title="Life Path Tree",
             )
             tree_fig.update_layout(paper_bgcolor="rgba(0,0,0,0)")
@@ -242,16 +284,19 @@ with right:
             "confidence": f"{bayes['confidence']*100:.2f}%",
         }
 
-        pdf_bytes = build_life_roadmap_pdf(profile, decisions, metrics_for_pdf, advice)
-        st.download_button(
-            label="Download Life Roadmap PDF",
-            data=pdf_bytes,
-            file_name="ai_life_roadmap.pdf",
-            mime="application/pdf",
-            use_container_width=True,
-        )
+        try:
+            pdf_bytes = build_life_roadmap_pdf(profile, decisions, metrics_for_pdf, advice)
+            st.download_button(
+                label="Download Life Roadmap PDF",
+                data=pdf_bytes,
+                file_name="ai_life_roadmap.pdf",
+                mime="application/pdf",
+                use_container_width=True,
+            )
+        except Exception:
+            st.warning("PDF generation is temporarily unavailable for this scenario. Please adjust inputs and retry.")
 
-        risk_fig = px.bar(risk_map, x="Risk", y="Score", color="Score", title="Risk Map")
+        risk_fig = px.bar(risk_map, x="Risk", y="Score", color="Score", title="Risk Map", color_continuous_scale="Turbo")
         risk_fig.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
         st.plotly_chart(risk_fig, use_container_width=True)
     else:

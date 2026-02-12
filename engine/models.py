@@ -113,6 +113,7 @@ class LifeForecastModel:
     @staticmethod
     def forecast_quality(df: pd.DataFrame) -> float:
         trend = df["Projected Wealth"].rolling(2).mean().bfill()
-        rmse = mean_squared_error(df["Projected Wealth"], trend, squared=False)
+        mse = mean_squared_error(df["Projected Wealth"], trend)
+        rmse = float(np.sqrt(mse))
         base = max(df["Projected Wealth"].max(), 1)
         return float(np.clip(1 - (rmse / base), 0, 1))

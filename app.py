@@ -49,6 +49,19 @@ st.markdown(
         padding: 1rem;
         box-shadow: 0 18px 35px rgba(0, 255, 255, 0.08);
       }
+      .section-title {
+        margin-top: 1rem;
+        margin-bottom: 0.3rem;
+        font-size: 1.1rem;
+        color: #9ad1ff;
+        letter-spacing: 0.5px;
+      }
+      .narrative {
+        padding: 0.9rem 1rem;
+        border-radius: 16px;
+        border: 1px solid rgba(136, 228, 255, 0.35);
+        background: linear-gradient(120deg, rgba(12, 23, 40, 0.9), rgba(18, 37, 72, 0.75));
+      }
       h1, h2, h3 { color: #b5d5ff !important; }
     </style>
     """,
@@ -67,7 +80,7 @@ left, right = st.columns([1.05, 1.6], gap="large")
 
 with left:
     st.markdown('<div class="glass">', unsafe_allow_html=True)
-    st.subheader("User Profile Input")
+    st.subheader("Profile & Strategy Inputs")
     age = st.slider("Age", 16, 60, 25)
     education = st.selectbox("Education", ["High School", "Bachelor", "Master", "MBA", "PhD"])
     skills = st.text_input("Skills", "Python, Product, Communication")
@@ -78,7 +91,7 @@ with left:
     career_goals = st.text_area("Career goals", "Build a high-impact AI startup with global reach.")
     family_support = st.slider("Family support", 1, 10, 7)
 
-    st.subheader("Decision Simulator")
+    st.markdown('<p class="section-title">Strategic Scenario Simulator</p>', unsafe_allow_html=True)
     decisions = {}
     for scenario in simulator.scenarios:
         decisions[scenario.key] = st.radio(scenario.label, scenario.options, horizontal=True)
@@ -121,12 +134,19 @@ with right:
         )
         advice = advisor.suggest(profile, decisions)
 
+        decision_alignment = float(np.clip((4 - sum([decisions["career_path"] == "Startup", decisions["location"] == "Abroad", decisions["study_work"] == "Higher Study", decisions["invest_save"] == "Invest"])) / 4, 0, 1))
         m1, m2, m3 = st.columns(3)
         m1.markdown(f'<div class="metric-card"><h3>Success Probability</h3><h2>{success_probability*100:.1f}%</h2></div>', unsafe_allow_html=True)
         m2.markdown(f'<div class="metric-card"><h3>Happiness Score</h3><h2>{happiness:.1f}/100</h2></div>', unsafe_allow_html=True)
         m3.markdown(f'<div class="metric-card"><h3>Forecast Confidence</h3><h2>{wealth_quality*100:.1f}%</h2></div>', unsafe_allow_html=True)
 
-        st.subheader("Visualization")
+        st.markdown(
+            f'''<div class="narrative"><b>Executive Insight:</b> Your profile indicates <b>{'high upside' if success_probability > 0.7 else 'moderate upside'}</b> with a
+            <b>{'balanced' if happiness > 60 else 'high-pressure'}</b> trajectory. Recommended posture: <b>{'aggressive growth' if decision_alignment < 0.5 else 'risk-calibrated execution'}</b>.</div>''',
+            unsafe_allow_html=True,
+        )
+
+        st.subheader("Advanced Visual Analytics")
         c1, c2 = st.columns(2)
 
         with c1:
@@ -174,6 +194,30 @@ with right:
             )
             tree_fig.update_layout(paper_bgcolor="rgba(0,0,0,0)")
             st.plotly_chart(tree_fig, use_container_width=True)
+
+        radar_scores = pd.DataFrame(
+            {
+                "Dimension": ["Career", "Finance", "Wellbeing", "Execution", "Support"],
+                "Score": [
+                    72 + (12 if decisions["career_path"] == "Startup" else -6),
+                    70 + (14 if decisions["invest_save"] == "Invest" else -4),
+                    85 - stress_level * 5,
+                    68 + (8 if decisions["study_work"] == "Higher Study" else 3),
+                    family_support * 10,
+                ],
+            }
+        )
+        radar_fig = px.line_polar(
+            radar_scores,
+            r="Score",
+            theta="Dimension",
+            line_close=True,
+            range_r=[0, 100],
+            title="Decision Readiness Radar",
+        )
+        radar_fig.update_traces(fill="toself", line_color="#39f5ff")
+        radar_fig.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
+        st.plotly_chart(radar_fig, use_container_width=True)
 
         timeline = px.line(
             wealth_df,
